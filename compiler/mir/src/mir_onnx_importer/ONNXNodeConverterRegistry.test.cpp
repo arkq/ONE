@@ -17,6 +17,10 @@
 #include "ONNXNodeConverterRegistry.h"
 #include "ONNXHelpers.h"
 
+#include "mir/Graph.h"
+#include "mir/TensorVariant.h"
+#include "mir/ops/ConstantOp.h"
+
 #include "gtest/gtest.h"
 
 using namespace mir_onnx;
@@ -61,4 +65,34 @@ TEST_F(NodeConverterRegsitryTest, lower_than_first_version)
 {
   auto res = registry.lookup("dummy", 0);
   ASSERT_EQ(res, nullptr);
+}
+
+// Test that getNodeInputs() preserves positional indices by returning nullptr for empty input names
+TEST(ConverterContextTest, getNodeInputs_preserves_positional_indices)
+{
+  mir::Graph graph;
+  ConverterContext ctx(&graph);
+
+  // Create two constant tensors to register as named outputs
+  mir::TensorVariant tv0({mir::DataType::FLOAT32, {1}});
+  mir::TensorVariant tv1({mir::DataType::FLOAT32, {1}});
+  auto *out0 = graph.create<mir::ops::ConstantOp>(tv0)->getOutput(0);
+  auto *out1 = graph.create<mir::ops::ConstantOp>(tv1)->getOutput(0);
+
+  ctx.setOutput("input_a", out0);
+  ctx.setOutput("input_b", out1);
+
+  // Build a node with 3 inputs where the middle one (index 1) is absent (empty name)
+  onnx::NodeProto node;
+  node.add_input("input_a");
+  node.add_input("");       // optional input absent
+  node.add_input("input_b");
+
+  auto inputs = ctx.getNodeInputs(node);
+
+  // Vector should have 3 entries preserving positional indices
+  ASSERT_EQ(inputs.size(), 3u);
+  EXPECT_EQ(inputs[0], out0);    // first input present
+  EXPECT_EQ(inputs[1], nullptr); // middle input absent → nullptr
+  EXPECT_EQ(inputs[2], out1);    // third input present at correct position
 }

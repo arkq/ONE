@@ -124,7 +124,7 @@ void convertConvTransposeV1(const onnx::NodeProto &onnx_node, ConverterContext *
     result = createOp<mir::ops::DeConv2DOp>(graph, input, kernel, attributes)->getOutput(0);
   }
 
-  if (inputs.size() > 2)
+  if (inputs.size() > 2 && inputs[2] != nullptr)
   {
     auto bias = inputs[2];
     bias = createOp<mir::ops::ReshapeOp>(graph, bias, mir::Shape{1, bias->getShape().dim(0), 1, 1})

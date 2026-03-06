@@ -80,10 +80,16 @@ ConverterContext::getNodeInputs(const onnx::NodeProto &onnx_node) const
 {
   const auto &input_names = onnx_node.input();
   std::vector<mir::Operation::Output *> outputs;
+  outputs.reserve(input_names.size());
 
   for (const auto &input_name : input_names)
   {
-    if (!input_name.empty())
+    if (input_name.empty())
+    {
+      // Preserve positional index for optional inputs that are absent (empty name).
+      outputs.emplace_back(nullptr);
+    }
+    else
     {
       auto *mir_output = getOutput(input_name);
       assert(mir_output != nullptr);

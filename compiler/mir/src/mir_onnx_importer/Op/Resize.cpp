@@ -72,6 +72,7 @@ void convertResizeV10(const onnx::NodeProto &onnx_node, ConverterContext *contex
 
 void convertResizeV11(const onnx::NodeProto &onnx_node, ConverterContext *context)
 {
+  std::vector<mir::Operation::Output *> inputs = context->getNodeInputs(onnx_node);
   mir::Graph *graph = context->getGraph();
 
   const auto coordinate_transformation_mode =
@@ -96,31 +97,17 @@ void convertResizeV11(const onnx::NodeProto &onnx_node, ConverterContext *contex
     throw std::runtime_error{"Resize v11: Only 'round_prefer_floor' rounding is supported"};
 
   // Inputs (by ONNX positional index): [0] X, [1] ROI, [2] scales, [3] sizes (optional)
-  // ROI (index 1) is only required for tf_crop_and_resize mode; it is commonly empty.
-  // We read inputs by positional index from the ONNX node directly to correctly handle the
-  // optional/empty ROI input, instead of relying on getNodeInputs() which compacts the vector by
-  // skipping empty names.
-  const auto &input_names = onnx_node.input();
-
-  if (input_names.size() < 3 || input_names.size() > 4)
+  // ROI (index 1) is only required for tf_crop_and_resize mode; it is commonly empty (nullptr).
+  // getNodeInputs() preserves positional indices, returning nullptr for empty input names.
+  if (inputs.size() < 3 || inputs.size() > 4)
     throw std::runtime_error{"Resize v11: Expected between 3 and 4 inputs"};
 
-  // Get X (required)
-  auto *x = context->getOutput(input_names[0]);
+  auto *x = inputs[0];
   if (!x)
     throw std::runtime_error{"Resize v11: Required input 'X' is missing"};
-
-  // ROI (index 1) is skipped for half_pixel mode — it may be an empty string.
-
-  // scales (index 2): may be an empty tensor when sizes is provided instead
-  mir::Operation::Output *scales_output = nullptr;
-  if (!input_names[2].empty())
-    scales_output = context->getOutput(input_names[2]);
-
-  // sizes (index 3, optional)
-  mir::Operation::Output *sizes_output = nullptr;
-  if (input_names.size() > 3 && !input_names[3].empty())
-    sizes_output = context->getOutput(input_names[3]);
+  // inputs[1] is ROI — skipped for half_pixel mode (may be nullptr)
+  auto *scales_output = inputs[2];  // nullptr when scales name is empty
+  auto *sizes_output = inputs.size() > 3 ? inputs[3] : nullptr;
 
   int rank = x->getShape().rank();
   if (rank != 4)
